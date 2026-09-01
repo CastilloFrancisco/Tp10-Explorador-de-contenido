@@ -1,98 +1,199 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import CategoryToggle from '../componentesP/categoryToggle';
+import Header from '../componentesP/header';
+import ListaPost from '../componentesP/listaPost';
+import SearchBar from '../componentesP/searchBar';
+import { MealItem } from '../componentesP/post';
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
+const FAVORITES_KEY = 'favoriteMeals';
+const DEFAULT_QUERY = 'chicken';
+
+type MealApiItem = {
+  idMeal?: string;
+  strMeal?: string;
+  strMealThumb?: string;
+  strCategory?: string;
+  strArea?: string;
+};
+
+type MealApiResponse = {
+  meals?: MealApiItem[] | null;
+};
+
+const normalizeMeal = (item: MealApiItem): MealItem => ({
+  id: item.idMeal ?? Math.random().toString(),
+  name: item.strMeal ?? 'Receta sin título',
+  image: item.strMealThumb,
+  category: item.strCategory,
+  area: item.strArea,
+});
+
+export default function HomePage() {
+  const [meals, setMeals] = useState<MealItem[]>([]);
+  const [searchText, setSearchText] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [favorites, setFavorites] = useState<MealItem[]>([]);
+
+  const loadFavorites = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(FAVORITES_KEY);
+      if (!stored) {
+        setFavorites([]);
+        return;
+      }
+
+      const parsed = JSON.parse(stored) as MealItem[];
+      setFavorites(Array.isArray(parsed) ? parsed : []);
+    } catch (e) {
+      setFavorites([]);
+    }
+  };
+
+  const loadMeals = async (query: string) => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const url = `https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(query || DEFAULT_QUERY)}`;
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error('Error en la petición');
+      }
+
+      const data: MealApiResponse = await response.json();
+      const normalized = (data.meals ?? []).map(normalizeMeal);
+      setMeals(normalized);
+    } catch (e) {
+      setMeals([]);
+      setError('No fue posible obtener la información.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadFavorites();
+    loadMeals(DEFAULT_QUERY);
+  }, []);
+
+  useEffect(() => {
+    if (!searchText.trim()) {
+      loadMeals(DEFAULT_QUERY);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      loadMeals(searchText.trim());
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchText]);
+
+  const categories = useMemo(() => {
+    const list = meals
+      .map((meal) => meal.category)
+      .filter((category): category is string => Boolean(category));
+
+    return ['All', ...Array.from(new Set(list))];
+  }, [meals]);
+
+  const filteredMeals = useMemo(() => {
+    const text = searchText.trim().toLowerCase();
+
+    return meals.filter((meal) => {
+      const matchesCategory = selectedCategory === 'All' || meal.category === selectedCategory;
+      const matchesText =
+        !text ||
+        meal.name.toLowerCase().includes(text) ||
+        (meal.area ?? '').toLowerCase().includes(text);
+
+      return matchesCategory && matchesText;
+    });
+  }, [meals, selectedCategory, searchText]);
+
+  const toggleFavorite = async (mealId: string | number) => {
+    const mealToSave = meals.find((meal) => String(meal.id) === String(mealId));
+    if (!mealToSave) {
+      return;
+    }
+
+    const exists = favorites.some((meal) => String(meal.id) === String(mealId));
+
+    const updated = exists
+      ? favorites.filter((meal) => String(meal.id) !== String(mealId))
+      : [...favorites, mealToSave];
+
+    setFavorites(updated);
+    await AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify(updated));
+  };
+
   return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+    <SafeAreaView style={styles.container}>
+      <Header title="Explorador" subtitle="Recetas del mundo" />
 
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+      <View style={styles.content}>
+        <SearchBar value={searchText} onChangeText={setSearchText} />
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
+        {categories.length > 1 && (
+          <CategoryToggle
+            categories={categories}
+            selectedCategory={selectedCategory}
+            onSelect={setSelectedCategory}
           />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
+        )}
 
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+        {loading ? (
+          <View style={styles.statusContainer}>
+            <ActivityIndicator size="large" color="#1d5f3d" />
+            <Text style={styles.statusText}>Cargando información...</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.statusContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : (
+          <ListaPost
+            data={filteredMeals}
+            favoriteIds={favorites.map((favorite) => favorite.id)}
+            onToggleFavorite={toggleFavorite}
+            emptyMessage="No encontramos resultados."
+          />
+        )}
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
+    backgroundColor: '#f7f3f1',
   },
-  safeArea: {
+  content: {
     flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
+    paddingTop: 18,
   },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  statusContainer: {
     flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 24,
   },
-  title: {
+  statusText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#3a3a3a',
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#9d1d1d',
     textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
+    paddingHorizontal: 18,
   },
 });
