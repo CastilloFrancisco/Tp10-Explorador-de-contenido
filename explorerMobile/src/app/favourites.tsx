@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Link } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
 import Header from '../componentesP/header';
 import ListaPost from '../componentesP/listaPost';
@@ -38,7 +39,17 @@ export default function FavouritesPage() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Header title="Favoritos" subtitle="Tus recetas guardadas" />
+      <Header
+        title="Favoritos"
+        subtitle="Tus recetas guardadas"
+        rightContent={
+          <Link href="/" asChild>
+            <Pressable style={styles.backButton}>
+              <Text style={styles.backButtonText}>Inicio</Text>
+            </Pressable>
+          </Link>
+        }
+      />
 
       <View style={styles.content}>
         {favorites.length === 0 ? (
@@ -84,5 +95,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     textAlign: 'center',
+  },
+  backButton: {
+    backgroundColor: '#1d5f3d',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  backButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

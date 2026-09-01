@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Link } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
 import CategoryToggle from '../componentesP/categoryToggle';
 import Header from '../componentesP/header';
@@ -135,7 +136,17 @@ export default function HomePage() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Header title="Explorador" subtitle="Recetas del mundo" />
+      <Header
+        title="Explorador"
+        subtitle="Recetas del mundo"
+        rightContent={
+          <Link href="/favourites" asChild>
+            <Pressable style={styles.favoriteButton}>
+              <Text style={styles.favoriteButtonText}>Favoritos</Text>
+            </Pressable>
+          </Link>
+        }
+      />
 
       <View style={styles.content}>
         <SearchBar value={searchText} onChangeText={setSearchText} />
@@ -195,5 +206,16 @@ const styles = StyleSheet.create({
     color: '#9d1d1d',
     textAlign: 'center',
     paddingHorizontal: 18,
+  },
+  favoriteButton: {
+    backgroundColor: '#1d5f3d',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  favoriteButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });
